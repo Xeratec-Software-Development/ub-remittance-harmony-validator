@@ -10,7 +10,7 @@
     <!-- Test UBL Version ID -->
     <sch:pattern>
         <sch:rule context="cbc:UBLVersionID[1]">            
-            <sch:assert test="(. = '2.3')">cbc:ProfileID[1] must equal '2.3'</sch:assert>                
+            <sch:assert test="(. = '2.3')">cbc:UBLVersionID[1] must equal '2.3'</sch:assert>                
         </sch:rule>
     </sch:pattern>
 

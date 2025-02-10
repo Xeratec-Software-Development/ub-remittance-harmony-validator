@@ -148,7 +148,11 @@ public class ExampleUserMessageValidatorSpi implements UserMessageValidatorSpi {
     public void validatePayloadContent(Element payloadContentElement) throws UserMessageValidatorSpiException {
         try {
             LOGGER.info("ValidatePayloadContent: Calling ExampleUserMessageValidatorSpi.validatePayloadContent method from the domibus-validation-extension");
+            
+            // Initialize the Schematron content
             String schematronContent = null;
+
+            // Initialize the transformer factory and transformer
             TransformerFactory transformerFactory = TransformerFactory.newInstance();
             Transformer transformer = transformerFactory.newTransformer();
             StringWriter writer = new StringWriter();
@@ -158,16 +162,14 @@ public class ExampleUserMessageValidatorSpi implements UserMessageValidatorSpi {
             Element creditNoteElement = (Element) payloadContentElement.getElementsByTagName("CreditNote").item(0);
             Element documentElement = (Element) payloadContentElement.getElementsByTagName("Document").item(0);
 
-            LOGGER.info("ValidatePayloadContent: Invoice element: " + invoiceElement);
-            LOGGER.info("ValidatePayloadContent: CreditNote element: " + creditNoteElement);
-            LOGGER.info("ValidatePayloadContent: Document element: " + documentElement);
-
+            // Validate the payload content element
             if (invoiceElement != null) {
                 transformer.transform(new DOMSource(invoiceElement), new StreamResult(writer));
 
                 // Get and validate the CustomizationID element
                 Element customizationIdElement = (Element) invoiceElement.getElementsByTagName("cbc:CustomizationID").item(0);
 
+                // Check if the CustomizationID element is missing
                 if (customizationIdElement == null) {
                     LOGGER.error("ValidatePayload: The CustomizationID element is missing");
                     throw new UserMessageValidatorSpiException("Error: The Payload is invalid.");
@@ -190,8 +192,6 @@ public class ExampleUserMessageValidatorSpi implements UserMessageValidatorSpi {
                     LOGGER.error("ValidatePayloadContent: The CustomizationID value is invalid");
                     throw new UserMessageValidatorSpiException("Error: The Payload is invalid.");
                 }
-
-                // schematronContent = loadSchematronFile("DBNA_Core_Invoice_Profile_1.0_Minimum.sch");
             } else if (creditNoteElement != null) {
                 LOGGER.info("ValidatePayloadContent: CreditNote element found");
                 transformer.transform(new DOMSource(creditNoteElement), new StreamResult(writer));
@@ -207,33 +207,12 @@ public class ExampleUserMessageValidatorSpi implements UserMessageValidatorSpi {
                 throw new UserMessageValidatorSpiException("Error: The Payload is invalid.");
             }
 
-            //LOGGER.info("ValidatePayloadContent: Invoice value: " + invoiceElement);
-            
-            
-
-            // transformer.transform(new DOMSource(invoiceElement), new StreamResult(writer));
-            
+            // Convert the payload content element to a string
             String payloadContent = writer.toString();
-
-            // Load the Schematron file content
-            LOGGER.info("ValidatePayloadContent: Loading Schematron file content");
-            // String schematronContent = loadSchematronFile("DBNA_Core_Invoice_Profile_1.0_Minimum.sch");
-            // String schematronContent = loadSchematronFile("DBNA Credit Note Profile 1.0 Minimum.sch");
-            // String schematronContent = loadSchematronFile("DBNA Extended Invoice Profile 1.0 Embedded Minimum.sch");
-            // String schematronContent = loadSchematronFile("DBNA Extended Invoice Profile 1.0 Envelope Minimum.sch");
-            // String schematronContent = loadSchematronFile("DBNA REMT.001.001.05.sch");
-            //LOGGER.info("ValidatePayloadContent: Schematron content: " + schematronContent);
 
             // Validate the payload content using the Schematron file
             LOGGER.info("ValidatePayloadContent: Validating payload content with Schematron");
             validateWithSchematron(payloadContent, schematronContent);
-
-            // Element validateElement = (Element) payloadContentElement.getElementsByTagName("Validate").item(0);
-
-            // if (validateElement != null) {
-            //     LOGGER.info("ValidatePayloadContent: Validating payload content with Schematron");
-            //     validateWithSchematron(payloadContent, schematronContent);
-            // }
 
             if (isXmlContent(payloadContentElement)) {
                 validateXmlContent(payloadContentElement);
@@ -280,24 +259,7 @@ public class ExampleUserMessageValidatorSpi implements UserMessageValidatorSpi {
         }
     }
 
-    private void validateXmlContent(Element payloadContentElement) throws UserMessageValidatorSpiException {
-        // Check for exactly one apex element
-        // NodeList childNodes = payloadContentElement.getChildNodes();
-        // int elementCount = 0;
-        // for (int i = 0; i < childNodes.getLength(); i++) {
-        //     if (childNodes.item(i) instanceof Element) {
-        //         elementCount++;
-        //     }
-        // }
-
-        // LOGGER.info("ValidateXmlContent: Number of child elements: " + elementCount);
-        // LOGGER.info("ValidateXmlContent: payloadContentElement: " + payloadContentElement);
-
-        // if (elementCount != 1) {
-        //     LOGGER.error("Error: XML content must have exactly one apex element");
-        //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-        // }
-    
+    private void validateXmlContent(Element payloadContentElement) throws UserMessageValidatorSpiException {       
         // Check for UTF-8 encoding
         String encoding = payloadContentElement.getOwnerDocument().getXmlEncoding();
         if (encoding == null || !encoding.equalsIgnoreCase(StandardCharsets.UTF_8.name())) {
@@ -337,28 +299,27 @@ public class ExampleUserMessageValidatorSpi implements UserMessageValidatorSpi {
     public void validateWithSchematron(String payloadContent, String schematronContent) throws UserMessageValidatorSpiException {
         try {
             LOGGER.info("ValidateWithSchematron: Calling ExampleUserMessageValidatorSpi.validateWithSchematron method from the domibus-validation-extension");
-            // LOGGER.info("ValidateWithSchematron: Payload content: " + payloadContent);
-            LOGGER.info("ValidateWithSchematron: Schematron content: " + schematronContent);
+            
+            // Create a Schematron resource from the Schematron content
             SchematronResourcePure schematron = SchematronResourcePure.fromString(schematronContent, StandardCharsets.UTF_8);
 
+            // Validate the Schematron rules
             if (!schematron.isValidSchematron()) {
                 LOGGER.error("ValidateWithSchematron: Invalid Schematron rules");
-                // IErrorList errorList = schematron.getErrorList();
-                // errorList.forEach(error -> LOGGER.error("Schematron validation error: " + error.getAsString(Locale.ENGLISH)));
                 throw new UserMessageValidatorSpiException("Invalid Schematron rules.");
             }
 
+            // Apply the Schematron validation to the payload content
             StringReader payloadReader = new StringReader(removeBOM(payloadContent));
             SchematronOutputType validationOutput = schematron.applySchematronValidationToSVRL(new StreamSource(payloadReader));
-
             List<SVRLFailedAssert> failedAssertions = SVRLHelper.getAllFailedAssertions(validationOutput);
 
+            // Check if the validation failed
             if (!failedAssertions.isEmpty()) {
                 StringBuilder errors = new StringBuilder("XML validation failed with the following errors:\n");
                 for (SVRLFailedAssert failedAssert : failedAssertions) {
                     errors.append("- ").append(failedAssert.getText()).append("\n");
                 }
-                //throw new Exception(errors.toString());
                 LOGGER.error("Schematron validation failed: " + errors.toString());
                 throw new UserMessageValidatorSpiException("Error: Invalid payload according to Schematron rules.");
             }
@@ -378,18 +339,8 @@ public class ExampleUserMessageValidatorSpi implements UserMessageValidatorSpi {
         return content;
     }
 
-    // private String readInputStream(InputStream inputStream) throws IOException {
-    //     StringBuilder stringBuilder = new StringBuilder();
-    //     try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
-    //         String line;
-    //         while ((line = reader.readLine()) != null) {
-    //             stringBuilder.append(line).append("\n");
-    //         }
-    //     }
-    //     return stringBuilder.toString().trim();  // Trim to remove extra newline
-    // }
-
     private String readInputStream(InputStream inputStream) throws IOException {
+        // Read the input stream content
         StringBuilder stringBuilder = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
             int c;
@@ -405,14 +356,8 @@ public class ExampleUserMessageValidatorSpi implements UserMessageValidatorSpi {
         try {
             LOGGER.info("ValidatePayload: Calling ExampleUserMessageValidatorSpi.validatePayload method from the domibus-validation-extension");
 
-            // Read the payload content
-            // String payloadContent = new BufferedReader(new InputStreamReader(payload, StandardCharsets.UTF_8))
-            //         .lines()
-            //         .collect(Collectors.joining("\n"));
-
             LOGGER.info("ValidatePayload: Reading the payload content");
             String payloadContent = readInputStream(payload);
-            LOGGER.info("ValidatePayload: Payload content: " + payloadContent);
 
             // Parse the XML content
             LOGGER.info("ValidatePayload: Parsing the XML content");
@@ -431,293 +376,7 @@ public class ExampleUserMessageValidatorSpi implements UserMessageValidatorSpi {
 
             // Validate the payload content according to the specified rules
             LOGGER.info("ValidatePayload: Validating the payload content");
-            validatePayloadContent(rootElement);
-                        
-            // if (rootElement == null) {
-            //     LOGGER.error("ValidatePayload: The root element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the root element name
-            // String rootElementValue = document.getDocumentElement().getNodeName();
-            // LOGGER.info("ValidatePayload: Root element of the XML: " + rootElement);
-
-            // if (!rootElementValue.contains("XHE")) {
-            //     LOGGER.error("ValidatePayload: The root element is not XHE");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the XHEVersionID element
-            // Element xheVersionIdElement = (Element) document.getElementsByTagName("xhb:XHEVersionID").item(0);
-
-            // if (xheVersionIdElement == null) {
-            //     LOGGER.error("ValidatePayload: The XHEVersionID element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the value of the XHEVersionID element
-            // String xheVersionIdValue = document.getElementsByTagName("xhb:XHEVersionID").item(0).getTextContent();
-            // LOGGER.info("ValidatePayload: XHEVersionID value: " + xheVersionIdValue);
-
-            // if (!xheVersionIdValue.equals("1.0")) {
-            //     LOGGER.error("ValidatePayload: The XHEVersionID value is not 1.0");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the CustomizationID element
-            // Element customizationIdElement = (Element) document.getElementsByTagName("xhb:CustomizationID").item(0);
-
-            // if (customizationIdElement == null) {
-            //     LOGGER.error("ValidatePayload: The CustomizationID element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the value of the CustomizationID element
-            // String customizationIdValue = customizationIdElement.getTextContent();
-            // LOGGER.info("ValidatePayload: CustomizationID value: " + customizationIdValue);
-
-            // if (!customizationIdValue.equals("http://docs.oasis-open.org/bdxr/ns/XHE/1/ExchangeHeaderEnvelope::XHE##dbnalliance-envelope-1.0")) {
-            //     LOGGER.error("ValidatePayload: The CustomizationID value is not http://docs.oasis-open.org/bdxr/ns/XHE/1/ExchangeHeaderEnvelope::XHE##dbnalliance-envelope-1.0");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the schemeID value of the CustomizationID element
-            // String schemeIdValue = customizationIdElement.getAttribute("schemeID");
-            // LOGGER.info("ValidatePayload: CustomizationID schemeID value: " + schemeIdValue);
-
-            // if (!schemeIdValue.equals("bdx-docid-qns")) {
-            //     LOGGER.error("ValidatePayload: The CustomizationID schemeID value is not bdx-docid-qns");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the ProfileID element
-            // Element profileIdElement = (Element) document.getElementsByTagName("xhb:ProfileID").item(0);
-
-            // if (profileIdElement == null) {
-            //     LOGGER.error("ValidatePayload: The ProfileID element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-            
-            // // Get and validate the value of the ProfileID element
-            // String profileIdValue = profileIdElement.getTextContent();
-            // LOGGER.info("ValidatePayload: ProfileID value: " + profileIdValue);
-
-            // if (!profileIdValue.equals("dbnalliance-envelope-1.0")) {
-            //     LOGGER.error("ValidatePayload: The ProfileID value is not dbnalliance-envelope-1.0");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the Header element
-            // Element headerElement = (Element) document.getElementsByTagName("xha:Header").item(0);
-
-            // if (headerElement == null) {
-            //     LOGGER.error("ValidatePayload: The Header element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the ID element of the Header element
-            // Element headerIdElement = (Element) headerElement.getElementsByTagName("xhb:ID").item(0);
-
-            // if (headerIdElement == null) {
-            //     LOGGER.error("ValidatePayload: The Header ID element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }                        
-
-            // // Get and validate the CreationDateTime element of the Header element
-            // Element creationDateTimeElement = (Element) headerElement.getElementsByTagName("xhb:CreationDateTime").item(0);
-
-            // if (creationDateTimeElement == null) {
-            //     LOGGER.error("ValidatePayload: The Header CreationDateTime element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the FromParty element of the Header element
-            // Element fromPartyElement = (Element) headerElement.getElementsByTagName("xha:FromParty").item(0);
-
-            // if (fromPartyElement == null) {
-            //     LOGGER.error("ValidatePayload: The FromParty element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-            
-            // // Get and validate the PartyIdentification element of the FromParty element
-            // Element fromPartyIdentificationElement = (Element) fromPartyElement.getElementsByTagName("xha:PartyIdentification").item(0);
-
-            // if (fromPartyIdentificationElement == null) {
-            //     LOGGER.error("ValidatePayload: The FromParty PartyIdentification element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the ID element of the PartyIdentification element
-            // Element fromPartyIdElement = (Element) fromPartyIdentificationElement.getElementsByTagName("xhb:ID").item(0);
-
-            // if (fromPartyIdElement == null) {
-            //     LOGGER.error("ValidatePayload: The FromParty PartyID element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // TODO: Validate the From Party ID against DBNAlliance Policy for Using Identifiers
-            // // String fromPartyIdValue = fromPartyIdElement.getTextContent();
-
-            // // TODO: Validate the From Party scheme against DBNAlliance Policy for Using Identifiers
-            // // String fromPartyIdSchemeID = fromPartyIdElement.getAttribute("schemeID");
-
-            // // Get and compare the values of the Header ID and FromParty ID elements
-            // String headerIdValue = headerIdElement.getTextContent();
-            // String fromPartyIdValue = fromPartyIdElement.getTextContent();
-            // LOGGER.info("ValidatePayload: Header ID value: " + headerIdValue);
-            // LOGGER.info("ValidatePayload: FromParty ID value: " + fromPartyIdValue);
-
-            // if (headerIdValue.equals(fromPartyIdValue)) {
-            //     LOGGER.error("ValidatePayload: The Header ID FromParty ID values must be unique");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the ToParty element of the Header element
-            // Element toPartyElement = (Element) headerElement.getElementsByTagName("xha:ToParty").item(0);
-
-            // if (toPartyElement == null) {
-            //     LOGGER.error("ValidatePayload: The ToParty element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the PartyIdentification element of the ToParty element
-            // Element toPartyIdentificationElement = (Element) toPartyElement.getElementsByTagName("xha:PartyIdentification").item(0);
-
-            // if (toPartyIdentificationElement == null) {
-            //     LOGGER.error("ValidatePayload: The ToParty PartyIdentification element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the ID element of the PartyIdentification element
-            // Element toPartyIdElement = (Element) toPartyIdentificationElement.getElementsByTagName("xhb:ID").item(0);
-
-            // if (toPartyIdElement == null) {
-            //     LOGGER.error("ValidatePayload: The ToParty PartyID element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // TODO: Validate the To Party ID against DBNAlliance Policy for Using Identifiers
-            // // String toPartyIdValue = toPartyIdElement.getTextContent();
-
-            // // TODO: Validate the To Party ID scheme against DBNAlliance Policy for Using Identifiers
-            // // String toPartyIdSchemeID = toPartyIdElement.getAttribute("schemeID");
-
-            // // Get and validate the Payloads element
-            // Element payloadsElement = (Element) document.getElementsByTagName("xha:Payloads").item(0);
-
-            // if (payloadsElement == null) {
-            //     LOGGER.error("ValidatePayload: The Payloads element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the Payload element of the Payloads element
-            // Element payloadElement = (Element) payloadsElement.getElementsByTagName("xha:Payload").item(0);
-
-            // if (payloadElement == null) {
-            //     LOGGER.error("ValidatePayload: The Payload element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // TODO: Get and validate the ID element of the Payload element
-            // // Element payloadIdElement = (Element) payloadElement.getElementsByTagName("xhb:ID").item(0);
-
-            // // if (payloadIdElement == null) {
-            // //     LOGGER.error("ValidatePayload: The Payload ID element is missing");
-            // //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // // }
-
-            // // Get and validate the ContentTypeCode element of the Payload element
-            // Element contentTypeCodeElement = (Element) payloadElement.getElementsByTagName("xhb:ContentTypeCode").item(0);
-
-            // if (contentTypeCodeElement == null) {
-            //     LOGGER.error("ValidatePayload: The ContentTypeCode element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the value of the ContentTypeCode element
-            // String contentTypeCodeValue = contentTypeCodeElement.getTextContent();
-            // LOGGER.info("ValidatePayload: ContentTypeCode value: " + contentTypeCodeValue);
-
-            // if (!contentTypeCodeValue.equals("application/xml")) {
-            //     LOGGER.error("ValidatePayload: The ContentTypeCode value is not application/xml");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the listID value of the ContentTypeCode element if it is set
-            // String contentTypeCodeListIdValue = contentTypeCodeElement.getAttribute("listID");
-            // LOGGER.info("ValidatePayload: ContentTypeCode listID value: " + contentTypeCodeListIdValue);
-
-            // if (!contentTypeCodeListIdValue.isEmpty() && !contentTypeCodeListIdValue.equals("MIME")) {
-            //     LOGGER.error("ValidatePayload: The ContentTypeCode listID value is not MIME");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the CustomizationID element of the ContentTypeCode element
-            // Element payloadCustomizationIdElement = (Element) payloadElement.getElementsByTagName("xhb:CustomizationID").item(0);
-
-            // if (payloadCustomizationIdElement == null) {
-            //     LOGGER.error("ValidatePayload: The ContentTypeCode CustomizationID element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // TODO: Get and validate the schemeID value of the CustomizationID element
-            // // String payloadCustomizationIdSchemeIdValue = payloadCustomizationIdElement.getAttribute("schemeID");
-            // // LOGGER.info("ValidatePayload: ContentTypeCode CustomizationID schemeID value: " + payloadCustomizationIdSchemeIdValue);
-
-            // // if (payloadCustomizationIdElement != null && payloadCustomizationIdSchemeIdValue.isEmpty()) {
-            // //     LOGGER.error("ValidatePayload: The ContentTypeCode CustomizationID schemeID value is missing");
-            // //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // // }
-
-            // // Get and validate the ProfileID element
-            // Element payloadProfileIdElement = (Element) payloadElement.getElementsByTagName("xhb:ProfileID").item(0);
-
-            // if (payloadProfileIdElement == null) {
-            //     LOGGER.error("ValidatePayload: The Payload ProfileID element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the InstanceEncryptionIndicator element
-            // Element instanceEncryptionIndicatorElement = (Element) payloadElement.getElementsByTagName("xhb:InstanceEncryptionIndicator").item(0);
-
-            // if (instanceEncryptionIndicatorElement == null) {
-            //     LOGGER.error("ValidatePayload: The InstanceEncryptionIndicator element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the value of the InstanceEncryptionIndicator element
-            // boolean instanceEncryptionIndicatorValue = Boolean.parseBoolean(instanceEncryptionIndicatorElement.getTextContent());
-            // LOGGER.info("ValidatePayload: InstanceEncryptionIndicator value: " + instanceEncryptionIndicatorValue);
-
-            // // Get and validate the InstanceEncryptionMethod element if the InstanceEncryptionIndicator value equals true
-            // if (instanceEncryptionIndicatorValue) {
-            //     Element instanceEncryptionMethodElement = (Element) payloadElement.getElementsByTagName("xhb:InstanceEncryptionMethod").item(0);
-
-            //     if (instanceEncryptionMethodElement == null) {
-            //         LOGGER.error("ValidatePayload: The InstanceEncryptionMethod element is missing");
-            //         throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            //     }
-            // }
-
-            // // Get and validate the InstanceHashValue element
-            // Element instanceHashValueElement = (Element) payloadElement.getElementsByTagName("xhb:InstanceHashValue").item(0);
-
-            // if (instanceHashValueElement != null) {
-            //     LOGGER.error("ValidatePayload: InstanceHashValue element cannot be present");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Get and validate the PayloadContent element
-            // Element payloadContentElement = (Element) payloadElement.getElementsByTagName("xha:PayloadContent").item(0);
-
-            // if (payloadContentElement == null) {
-            //     LOGGER.error("ValidatePayload: The PayloadContent element is missing");
-            //     throw new UserMessageValidatorSpiException("Error: The XHE Envelope is invalid.");
-            // }
-
-            // // Validate the payload content according to the specified rules
-            // validatePayloadContent(rootElement);
-
+            validatePayloadContent(rootElement);                     
         } catch (Exception e) {
             LOGGER.error("ValidatePayload: Error validating payload", e);
             throw new UserMessageValidatorSpiException("Error validating payload", e);
