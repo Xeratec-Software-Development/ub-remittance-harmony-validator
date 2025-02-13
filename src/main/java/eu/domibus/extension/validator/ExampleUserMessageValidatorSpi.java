@@ -49,6 +49,7 @@ import org.springframework.stereotype.Service;
 
 import eu.domibus.core.spi.validation.UserMessageValidatorSpi;
 import eu.domibus.core.spi.validation.UserMessageValidatorSpiException;
+import eu.domibus.extension.validator.ConfigurationLoader;
 import eu.domibus.ext.domain.AgreementRefDTO;
 import eu.domibus.ext.domain.CollaborationInfoDTO;
 import eu.domibus.ext.domain.DescriptionDTO;
@@ -68,15 +69,31 @@ import eu.domibus.ext.domain.UserMessageDTO;
 import eu.domibus.logging.DomibusLogger;
 import eu.domibus.logging.DomibusLoggerFactory;
 
+import eu.domibus.api.property.DomibusPropertyProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+
 @Service
 public class ExampleUserMessageValidatorSpi implements UserMessageValidatorSpi {
 
     private static final DomibusLogger LOGGER = DomibusLoggerFactory.getLogger(ExampleUserMessageValidatorSpi.class);
+    // private ConfigurationLoader configLoader;
+
+    // public ExampleUserMessageValidatorSpi() {
+    //     configLoader = new ConfigurationLoader("harmony-validation-extension.properties");
+    //     String pluginName = configLoader.getProperty("plugin.name");
+    //     LOGGER.info("ExampleUserMessageValidatorSpi: Plugin Name: " + pluginName);
+    // }
+
+    @Autowired
+    private DomibusPropertyProvider domibusPropertyProvider;
 
     @Override
     public void validateUserMessage(UserMessageDTO userMessage) throws UserMessageValidatorSpiException {
         LOGGER.info(
                 "ValidateUserMessage: Calling ExampleUserMessageValidatorSpi.validateUserMessage method from the domibus-validation-extension");       
+
+        String pluginName = domibusPropertyProvider.getProperty("plugin.name");
+        LOGGER.info("ExampleUserMessageValidatorSpi: Plugin Name: " + pluginName);
 
         // PayloadInfoDTO
         PayloadInfoDTO payloadInfo = userMessage.getPayloadInfo();
@@ -126,7 +143,9 @@ public class ExampleUserMessageValidatorSpi implements UserMessageValidatorSpi {
 
             // Load the Schematron file content
             LOGGER.info("validateXheEnvelope: Loading Schematron file content");
-            String schematronContent = loadSchematronFile("DBNA_XHE.sch");
+            String xheSchematronFilename = domibusPropertyProvider.getProperty("plugin.xhe.schematron.filename");
+            LOGGER.info("ValidateXheEnvelope: xheSchematronFilename: " + xheSchematronFilename);
+            String schematronContent = loadSchematronFile(xheSchematronFilename);
 
             // Validate the XHE envelope using the Schematron file
             LOGGER.info("validateXheEnvelope: Validating XHE envelope with Schematron");
@@ -148,6 +167,28 @@ public class ExampleUserMessageValidatorSpi implements UserMessageValidatorSpi {
     public void validatePayloadContent(Element payloadContentElement) throws UserMessageValidatorSpiException {
         try {
             LOGGER.info("ValidatePayloadContent: Calling ExampleUserMessageValidatorSpi.validatePayloadContent method from the domibus-validation-extension");
+            
+            // Intialize the CustomizationID values
+            String coreInvoiceCustomizationId = domibusPropertyProvider.getProperty("plugin.payload.customizationID.coreInvoice");
+            String extendedInvoiceEmbeddedCustomizationId = domibusPropertyProvider.getProperty("plugin.payload.customizationID.extendedInvoiceEmbedded");
+            String extendedInvoiceEnvelopeCustomizationId = domibusPropertyProvider.getProperty("plugin.payload.customizationID.extendedInvoiceEnvelope");
+
+            LOGGER.info("ValidatePayloadContent: coreInvoiceCustomizationId: " + coreInvoiceCustomizationId);
+            LOGGER.info("ValidatePayloadContent: extendedInvoiceEmbeddedCustomizationId: " + extendedInvoiceEmbeddedCustomizationId);
+            LOGGER.info("ValidatePayloadContent: extendedInvoiceEnvelopeCustomizationId: " + extendedInvoiceEnvelopeCustomizationId);
+
+            // Initialize the schematron filenames
+            String coreInvoiceSchematronFilename = domibusPropertyProvider.getProperty("plugin.payload.schematron.coreInvoice.filename");
+            String creditNoteSchematronFilename = domibusPropertyProvider.getProperty("plugin.payload.schematron.creditNote.filename");
+            String extendedInvoiceEmbeddedSchematronFilename = domibusPropertyProvider.getProperty("plugin.payload.schematron.extendedInvoiceEmbedded.filename");
+            String extendedInvoiceEnvelopeSchematronFilename = domibusPropertyProvider.getProperty("plugin.payload.schematron.extendedInvoiceEnvelope.filename");
+            String remittanceSchematronFilename = domibusPropertyProvider.getProperty("plugin.payload.schematron.remittance.filename");
+
+            LOGGER.info("ValidatePayloadContent: coreInvoiceSchematronFilename: " + coreInvoiceSchematronFilename);
+            LOGGER.info("ValidatePayloadContent: creditNoteSchematronFilename: " + creditNoteSchematronFilename);
+            LOGGER.info("ValidatePayloadContent: extendedInvoiceEmbeddedSchematronFilename: " + extendedInvoiceEmbeddedSchematronFilename);
+            LOGGER.info("ValidatePayloadContent: extendedInvoiceEnvelopeSchematronFilename: " + extendedInvoiceEnvelopeSchematronFilename);
+            LOGGER.info("ValidatePayloadContent: remittanceSchematronFilename: " + remittanceSchematronFilename);
             
             // Initialize the Schematron content
             String schematronContent = null;
@@ -179,15 +220,15 @@ public class ExampleUserMessageValidatorSpi implements UserMessageValidatorSpi {
                 String customizationIdValue = customizationIdElement.getTextContent();
                 LOGGER.info("ValidatePayload: CustomizationID value: " + customizationIdValue);
 
-                if (customizationIdValue.equals("urn:oasis:names:specification:ubl:schema:xsd:Invoice-2::Invoice##DBNAlliance-1.0-data-Core")) {
-                    LOGGER.info("ValidatePayloadContent: Schematron file: " + "DBNA_Core_Invoice_Profile_1.0_Minimum.sch");
-                    schematronContent = loadSchematronFile("DBNA_Core_Invoice_Profile_1.0_Minimum.sch");
-                } else if (customizationIdValue.equals("urn:oasis:names:specification:ubl:schema:xsd:Invoice-2::Invoice##DBNAlliance-1.0-data-Extended-embedded-attachments")) {
-                    LOGGER.info("ValidatePayloadContent: Schematron file: " + "DBNA Extended Invoice Profile 1.0 Embedded Minimum.sch");
-                    schematronContent = loadSchematronFile("DBNA Extended Invoice Profile 1.0 Embedded Minimum.sch");
-                } else if (customizationIdValue.equals("urn:oasis:names:specification:ubl:schema:xsd:Invoice-2::Invoice##DBNAlliance-1.0-data-Extended-envelope-attachments")) {
-                    LOGGER.info("ValidatePayloadContent: Schematron file: " + "DBNA Extended Invoice Profile 1.0 Envelope Minimum.sch");
-                    schematronContent = loadSchematronFile("DBNA Extended Invoice Profile 1.0 Envelope Minimum.sch");
+                if (customizationIdValue.equals(coreInvoiceCustomizationId)) {
+                    LOGGER.info("ValidatePayloadContent: Schematron file: " + coreInvoiceSchematronFilename);
+                    schematronContent = loadSchematronFile(coreInvoiceSchematronFilename);
+                } else if (customizationIdValue.equals(extendedInvoiceEmbeddedCustomizationId)) {
+                    LOGGER.info("ValidatePayloadContent: Schematron file: " + extendedInvoiceEmbeddedSchematronFilename);
+                    schematronContent = loadSchematronFile(extendedInvoiceEmbeddedSchematronFilename);
+                } else if (customizationIdValue.equals(extendedInvoiceEnvelopeCustomizationId)) {
+                    LOGGER.info("ValidatePayloadContent: Schematron file: " + extendedInvoiceEnvelopeSchematronFilename);
+                    schematronContent = loadSchematronFile(extendedInvoiceEnvelopeSchematronFilename);
                 } else {
                     LOGGER.error("ValidatePayloadContent: The CustomizationID value is invalid");
                     throw new UserMessageValidatorSpiException("Error: The Payload is invalid.");
@@ -195,13 +236,13 @@ public class ExampleUserMessageValidatorSpi implements UserMessageValidatorSpi {
             } else if (creditNoteElement != null) {
                 LOGGER.info("ValidatePayloadContent: CreditNote element found");
                 transformer.transform(new DOMSource(creditNoteElement), new StreamResult(writer));
-                LOGGER.info("ValidatePayloadContent: Schematron file: " + "DBNA Credit Note Profile 1.0 Minimum.sch");
-                schematronContent = loadSchematronFile("DBNA Credit Note Profile 1.0 Minimum.sch");
+                LOGGER.info("ValidatePayloadContent: Schematron file: " + creditNoteSchematronFilename);
+                schematronContent = loadSchematronFile(creditNoteSchematronFilename);
             } else if (documentElement != null) {
                 LOGGER.info("ValidatePayloadContent: Document element found");
                 transformer.transform(new DOMSource(documentElement), new StreamResult(writer));
-                LOGGER.info("ValidatePayloadContent: Schematron file: " + "DBNA REMT.001.001.05.sch");
-                schematronContent = loadSchematronFile("DBNA REMT.001.001.05.sch");
+                LOGGER.info("ValidatePayloadContent: Schematron file: " + remittanceSchematronFilename);
+                schematronContent = loadSchematronFile(remittanceSchematronFilename);
             } else {
                 LOGGER.error("ValidatePayloadContent: The payload content element is invalid");
                 throw new UserMessageValidatorSpiException("Error: The Payload is invalid.");
